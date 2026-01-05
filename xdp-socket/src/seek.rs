@@ -62,7 +62,7 @@ impl Seek_<_TX> for Socket<_TX> {
                 let desc = XdpDesc::new(addr, 0, 0);
                 self.consumer = self.consumer.wrapping_add(1);
                 c_ring.update_consumer(self.consumer);
-                let x_head = self.producer & self.x_ring.mod_mask;
+                let x_head = self.producer.wrapping_add(self.available) & self.x_ring.mod_mask;
                 *self.x_ring.mut_desc_at(x_head) = desc;
                 self.available += 1;
                 if self.available as usize >= count || c_producer == self.consumer {
