@@ -57,6 +57,9 @@ impl Seek_<_TX> for Socket<_TX> {
             Err(RingError::RingFull)
         } else {
             loop {
+                if self.available as usize >= self.x_ring.len {
+                    break;
+                }
                 let c_head = self.consumer & c_ring.mod_mask;
                 let addr = c_ring.desc_at(c_head);
                 let desc = XdpDesc::new(addr, 0, 0);
