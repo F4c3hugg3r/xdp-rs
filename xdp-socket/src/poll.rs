@@ -64,16 +64,20 @@ where
     ///
     /// # Arguments
     ///
-    /// * `_timeout` - An optional timeout. If `None`, it blocks indefinitely.
+    /// * `timeout` - An optional timeout in milliseconds. If `None`, it blocks indefinitely.
     ///
     /// # Returns
     ///
     /// An `io::Result` indicating success or failure.
-    fn poll_wait(&self, _timeout: Option<Duration>) -> Result<(), io::Error> {
+    fn poll_wait(&self, timeout: Option<Duration>) -> Result<(), io::Error> {
         self.kick()?;
         let mask = match t {
             _TX => libc::POLLOUT,
             _RX => libc::POLLIN,
+        };
+        let timeout_ms = match timeout {
+            Some(d) => d.as_millis() as i32,
+            None => -1,
         };
         unsafe {
             loop {
@@ -82,10 +86,27 @@ where
                     revents: 0,
                     fd: self.raw_fd,
                 }];
-                if 0 > libc::poll(fds.as_mut_ptr(), 1, -1) {
-                    //..
-                } else if (fds[0].revents & mask) != 0 {
-                    break;
+                match libc::poll(fds.as_mut_ptr(), 1, timeout_ms) {
+                    -1 => {
+                        let err = io::Error::last_os_error();
+                        // Check if the call was interrupted by a signal (EINTR)
+                        if err.kind() == io::ErrorKind::Interrupted {
+                            continue;
+                        }
+                        return Err(err);
+                    }
+                    0 => return Err(io::Error::from(io::ErrorKind::TimedOut)),
+                    _ => {
+                        let revents = fds[0].revents;
+                        // Check if the requested event (POLLIN or POLLOUT) occurred
+                        if revents & mask != 0 {
+                            break;
+                        }
+                        // Check for error conditions on the socket 
+                        if revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
+                            return Err(io::Error::new(io::ErrorKind::Other, "poll error"));
+                        }
+                    }
                 }
             }
         }
