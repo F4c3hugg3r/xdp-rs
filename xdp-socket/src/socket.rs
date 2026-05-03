@@ -37,7 +37,7 @@
 use crate::mmap::OwnedMmap;
 use crate::ring::{Ring, XdpDesc};
 use std::fmt::Display;
-use std::os::fd::{AsRawFd as _, OwnedFd};
+use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::sync::Arc;
 use std::{io, ptr};
 
@@ -265,5 +265,19 @@ impl Inner {
     /// Constructs a new `Inner` with the given UMEM and file descriptor.
     pub(crate) fn new(umem: OwnedMmap, fd: OwnedFd) -> Self {
         Self { umem, fd }
+    }
+}
+
+impl<const t: _Direction> AsRawFd for Socket<t> {
+    /// Returns the underlying raw file descriptor.
+    ///
+    /// This is useful for interoperability with other crates (e.g., registering
+    /// the socket in an eBPF map via `aya`).
+    ///
+    /// # Returns
+    ///
+    /// The underlying raw file descriptor.
+    fn as_raw_fd(&self) -> RawFd {
+        self.raw_fd
     }
 }
